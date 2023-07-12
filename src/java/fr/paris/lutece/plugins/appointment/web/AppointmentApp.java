@@ -162,7 +162,8 @@ public class AppointmentApp extends MVCApplication
     private static final String TEMPLATE_HTML_CODE_FORM = "skin/plugins/appointment/html_code_form.html";
     private static final String TEMPLATE_HTML_CODE_NB_PLACES_TO_TAKE_FORM = "skin/plugins/appointment/appointment_nb_places_to_take_form.html";
     private static final String TEMPLATE_TASKS_FORM_WORKFLOW = "skin/plugins/appointment/tasks_form_workflow.html";
-
+    private static final String TEMPLATE_ERROR_APPOINTMENT_REFERENCE = "skin/plugins/appointment/error_appointment_reference.html";
+    
     // Views
     public static final String VIEW_APPOINTMENT_FORM = "getViewAppointmentForm";
     public static final String VIEW_APPOINTMENT_CALENDAR = "getViewAppointmentCalendar";
@@ -198,7 +199,6 @@ public class AppointmentApp extends MVCApplication
     private static final String PARAMETER_FIRST_NAME = "firstname";
     private static final String PARAMETER_LAST_NAME = "lastname";
     private static final String PARAMETER_NUMBER_OF_BOOKED_SEATS = "nbBookedSeats";
-    private static final String PARAMETER_ID_APPOINTMENT = "id_appointment";
     private static final String PARAMETER_BACK = "back";
     private static final String PARAMETER_REF_APPOINTMENT = "refAppointment";
     private static final String PARAMETER_FROM_MY_APPOINTMENTS = "fromMyappointments";
@@ -269,8 +269,9 @@ public class AppointmentApp extends MVCApplication
     private static final String ERROR_MESSAGE_FORM_NOT_ACTIVE = "appointment.validation.appointment.formNotActive";
     private static final String ERROR_MESSAGE_NO_STARTING_VALIDITY_DATE = "appointment.validation.appointment.noStartingValidityDate";
     private static final String ERROR_MESSAGE_FORM_NO_MORE_VALID = "appointment.validation.appointment.formNoMoreValid";
-    private static final String ERROR_MESSAGE_NO_AVAILABLE_SLOT = "appointment.validation.appointment.noAvailableSlot";
     private static final String ERROR_MESSAGE_REPORT_APPOINTMENT = "appointment.message.error.report.appointment";
+    private static final String ERROR_MESSAGE_NO_AVAILABLE_SLOT = "appointment.validation.appointment.noAvailableSlot";
+
     private static final String ERROR_MESSAGE_NB_PLACE_TO_TAKE_TO_BIG = "appointment.message.error.nbplacestotake.toobig";
 
     // Messages
@@ -287,8 +288,6 @@ public class AppointmentApp extends MVCApplication
     private static final String BASIC_WEEK = "basicWeek";
     private static final String AGENDA_DAY = "agendaDay";
     private static final String BASIC_DAY = "basicDay";
-    private static final String PROPERTY_NB_PLACES = "appointment.site_property.nbplaces";
-
     private static final String STEP_3 = "step3";
 
     // Local variables
@@ -314,12 +313,12 @@ public class AppointmentApp extends MVCApplication
         Locale locale = getLocale( request );
         _nNbPlacesToTake = 0;
         
-        _strNbPlacesToTakeLength = DatastoreService.getDataValue( PROPERTY_NB_PLACES, "10" );
         int nIdForm = Integer.parseInt( request.getParameter( PARAMETER_ID_FORM ) );
         String nbPlacesToTake = request.getParameter( PARAMETER_NB_PLACE_TO_TAKE );
         String refAppointment = request.getParameter( PARAMETER_REF_APPOINTMENT );
 
         _appointmentForm = FormService.buildAppointmentFormWithoutReservationRule( nIdForm );
+        _strNbPlacesToTakeLength = String.valueOf(_appointmentForm.getNbConsecutiveSlots());
         boolean bError = false;
         if ( !_appointmentForm.getIsActive( ) )
         {
@@ -333,6 +332,12 @@ public class AppointmentApp extends MVCApplication
         {
             // If we want to change the date of an appointment
             AppointmentDTO appointmentDTO = AppointmentService.buildAppointmentDTOFromRefAppointment( refAppointment );
+            // Check if an appointment Object was found and built with the given reference
+            if( appointmentDTO == null )
+            {
+            	// When the appointment Object doesn't exist, we display an error message to the user
+            	return getXPage( TEMPLATE_ERROR_APPOINTMENT_REFERENCE, locale, model );
+            }
             if ( appointmentDTO.getIsCancelled( ) || appointmentDTO.getStartingDateTime( ).isBefore( LocalDateTime.now( ) ) )
             {
                 addError( ERROR_MESSAGE_REPORT_APPOINTMENT, locale );
@@ -426,10 +431,11 @@ public class AppointmentApp extends MVCApplication
                 listSlots = SlotService.buildListSlot( nIdForm, mapReservationRule, startingDateOfDisplay, endingDateOfDisplay );
             }
             
-            if ( _nNbPlacesToTake > Integer.valueOf( _strNbPlacesToTakeLength ) )
+            if ( _nNbPlacesToTake > Integer.parseInt( _strNbPlacesToTakeLength ) )
             {
             	addError( ERROR_MESSAGE_NB_PLACE_TO_TAKE_TO_BIG, locale );
             }
+
             // Get the min time from now before a user can take an appointment (in hours)
             int minTimeBeforeAppointment = _appointmentForm.getMinTimeBeforeAppointment( );
             LocalDateTime dateTimeBeforeAppointment = LocalDateTime.now( ).plusHours( minTimeBeforeAppointment );
@@ -448,6 +454,7 @@ public class AppointmentApp extends MVCApplication
                 listSlots = listSlots.stream( ).filter( s -> s.getNbPotentialRemainingPlaces( ) >= nbBookedSeats && s.getIsOpen( ) )
                         .collect( Collectors.toList( ) );
                 model.put( MARK_MODIFICATION_DATE_APPOINTMENT, true );
+                model.put( PARAMETER_REF_APPOINTMENT, refAppointment );
             }
             else
             {
@@ -466,9 +473,12 @@ public class AppointmentApp extends MVCApplication
                             .get( ).getDate( );
                 }
             }
-            if ( firstDateOfFreeOpenSlot == null )
-            {
-                addError( ERROR_MESSAGE_NO_AVAILABLE_SLOT, locale );
+            if (firstDateOfFreeOpenSlot == null) {
+                if (formMessages != null && StringUtils.isNotEmpty(formMessages.getNoAvailableSlot())) {
+                    addError(formMessages.getNoAvailableSlot());
+                } else {
+                    addError(ERROR_MESSAGE_NO_AVAILABLE_SLOT, locale);
+                }
                 bError = true;
             }
             // Display the week with the first available slot
@@ -601,6 +611,10 @@ public class AppointmentApp extends MVCApplication
         {
             addError( ERROR_MESSAGE_FORM_NOT_ACTIVE, getLocale( request ) );
             return redirect( request, VIEW_APPOINTMENT_CALENDAR, PARAMETER_ID_FORM, nIdForm, PARAMETER_NB_PLACE_TO_TAKE, _nNbPlacesToTake );
+        }
+        if(!_appointmentForm.getIsMultislotAppointment())
+        {
+            _nNbPlacesToTake = 0;
         }
         checkMyLuteceAuthentication( _appointmentForm, request );
         // Patch needed for authentication after being on the form
@@ -814,10 +828,11 @@ public class AppointmentApp extends MVCApplication
         List<GenericAttributeError> listFormErrors = new ArrayList<>( );
         Locale locale = request.getLocale( );
         String strEmail = request.getParameter( PARAMETER_EMAIL );
+        String strEmailConfirm = request.getParameter( PARAMETER_EMAIL_CONFIRMATION );
         String strFirstName = request.getParameter( PARAMETER_FIRST_NAME );
         String strLastName = request.getParameter( PARAMETER_LAST_NAME );
         AppointmentUtilities.checkDateOfTheAppointmentIsNotBeforeNow( _notValidatedAppointment, locale, listFormErrors );
-        AppointmentUtilities.checkEmail( strEmail, request.getParameter( PARAMETER_EMAIL_CONFIRMATION ), _appointmentForm, locale, listFormErrors );
+        AppointmentUtilities.checkEmail( strEmail, strEmailConfirm, _appointmentForm, locale, listFormErrors );
         int nbBookedSeats = _nNbPlacesToTake;
         if ( _nNbPlacesToTake == 0 )
         {
@@ -826,7 +841,7 @@ public class AppointmentApp extends MVCApplication
                     _notValidatedAppointment, locale, listFormErrors );
 
         }
-        AppointmentUtilities.fillAppointmentDTO( _notValidatedAppointment, nbBookedSeats, strEmail, strFirstName, strLastName );
+        AppointmentUtilities.fillAppointmentDTO( _notValidatedAppointment, nbBookedSeats, strEmail, strEmailConfirm, strFirstName, strLastName );
         AppointmentUtilities.validateFormAndEntries( _notValidatedAppointment, request, listFormErrors, false );
         AppointmentUtilities.fillInListResponseWithMapResponse( _notValidatedAppointment );
         boolean bErrors = false;
@@ -1215,7 +1230,7 @@ public class AppointmentApp extends MVCApplication
     }
 
     /**
-     * Get the view for he user who wants to cancel its appointment
+     * Get the view for the user who wants to cancel its appointment
      * 
      * @param request
      * @return the view
@@ -1485,6 +1500,12 @@ public class AppointmentApp extends MVCApplication
             if ( WorkflowService.getInstance( ).isDisplayTasksForm( nIdAction, getLocale( request ) ) )
             {
                 AppointmentDTO appointment = AppointmentService.buildAppointmentDTOFromRefAppointment( refAppointment );
+                // Check if an appointment Object was found and built with the given reference
+                if( appointment == null )
+                {
+                	// When the appointment Object doesn't exist, we display an error message to the user
+                	return getXPage( TEMPLATE_ERROR_APPOINTMENT_REFERENCE, getLocale( request ), null );
+                }
                 ITaskService taskService = SpringContextService.getBean( TaskService.BEAN_SERVICE );
                 List<ITask> listActionTasks = taskService.getListTaskByIdAction( nIdAction, getLocale( request ) );
                 if ( listActionTasks.stream( ).anyMatch( task -> task.getTaskType( ).getKey( ).equals( "taskReportAppointment" ) ) )
@@ -1527,6 +1548,12 @@ public class AppointmentApp extends MVCApplication
         {
             int nIdAction = Integer.parseInt( strIdAction );
             Appointment appointment = AppointmentService.findAppointmentByReference( refAppointment );
+            // Check if an appointment Object was found and built with the given reference
+            if( appointment == null )
+            {
+            	// When the appointment Object doesn't exist, we display an error message to the user
+            	return getXPage( TEMPLATE_ERROR_APPOINTMENT_REFERENCE, getLocale( request ), null );
+            }
             int nIdAppointment = appointment.getIdAppointment( );
 
             List<AppointmentSlot> listApptSlot = appointment.getListAppointmentSlot( );
@@ -1599,7 +1626,7 @@ public class AppointmentApp extends MVCApplication
         }
         return getMyAppointments( request );
     }
-
+    
     /**
      * Get the captcha security service
      * 

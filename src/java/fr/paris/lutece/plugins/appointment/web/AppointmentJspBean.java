@@ -42,6 +42,7 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -305,6 +306,7 @@ public class AppointmentJspBean extends MVCAdminJspBean
     private static final String LAST_NAME = "last_name";
     private static final String FIRST_NAME = "first_name";
     private static final String EMAIL = "email";
+    private static final String PHONE_NUMBER = "phone_number";
     private static final String NB_BOOKED_SEATS = "nbBookedSeats";
     private static final String DATE_APPOINTMENT = "date_appointment";
     private static final String ADMIN = "admin";
@@ -320,6 +322,7 @@ public class AppointmentJspBean extends MVCAdminJspBean
     private AppointmentFormDTO _appointmentForm;
     private AppointmentDTO _notValidatedAppointment;
     private AppointmentDTO _validatedAppointment;
+    List<GenericAttributeError> listFormErrors = new ArrayList<>( );
     Plugin _moduleAppointmentDesk = PluginService.getPlugin( AppPropertiesService.getProperty( PROPERTY_MODULE_APPOINTMENT_DESK_NAME ) );
 
     /**
@@ -1012,6 +1015,11 @@ public class AppointmentJspBean extends MVCAdminJspBean
         }
 
         Map<String, Object> model = getModel( );
+        if ( CollectionUtils.isNotEmpty( listFormErrors ) )
+        {
+            model.put( MARK_FORM_ERRORS, listFormErrors );
+            listFormErrors = new ArrayList<>( );
+        }
         List<Entry> listEntryFirstLevel = EntryService.getFilter( _appointmentForm.getIdForm( ), false );
         StringBuilder strBuffer = new StringBuilder( );
         for ( Entry entry : listEntryFirstLevel )
@@ -1036,6 +1044,7 @@ public class AppointmentJspBean extends MVCAdminJspBean
         model.put( MARK_FORM_HTML, templateForm.getHtml( ) );
         model.put( MARK_LOCALE, getLocale( ) );
 
+
         return getPage( PROPERTY_PAGE_TITLE_CREATE_APPOINTMENT, TEMPLATE_CREATE_APPOINTMENT, model );
     }
 
@@ -1054,10 +1063,10 @@ public class AppointmentJspBean extends MVCAdminJspBean
         String strIdForm = request.getParameter( PARAMETER_ID_FORM );
         int nIdForm = Integer.parseInt( strIdForm );
         String strEmail = request.getParameter( PARAMETER_EMAIL );
-        List<GenericAttributeError> listFormErrors = new ArrayList<>( );
+        String strEmailConfirm = request.getParameter( PARAMETER_EMAIL_CONFIRMATION );
         Locale locale = getLocale( );
         AppointmentUtilities.checkDateOfTheAppointmentIsNotBeforeNow( _notValidatedAppointment, locale, listFormErrors );
-        AppointmentUtilities.checkEmail( strEmail, request.getParameter( PARAMETER_EMAIL_CONFIRMATION ), _appointmentForm, locale, listFormErrors );
+        AppointmentUtilities.checkEmail( strEmail, strEmailConfirm, _appointmentForm, locale, listFormErrors );
 
         if ( _appointmentForm.getBoOverbooking( ) && RBACService.isAuthorized( AppointmentFormDTO.RESOURCE_TYPE, strIdForm,
                 AppointmentResourceIdService.PERMISSION_OVERBOOKING_FORM, (User) getUser( ) ) )
@@ -1107,7 +1116,7 @@ public class AppointmentJspBean extends MVCAdminJspBean
                     locale );
             addWarning( strErrorMessageDateWithAppointments );
         }
-        AppointmentUtilities.fillAppointmentDTO( _notValidatedAppointment, nbBookedSeats, strEmail, request.getParameter( PARAMETER_FIRST_NAME ),
+        AppointmentUtilities.fillAppointmentDTO( _notValidatedAppointment, nbBookedSeats, strEmail, strEmailConfirm, request.getParameter( PARAMETER_FIRST_NAME ),
                 request.getParameter( PARAMETER_LAST_NAME ) );
         AppointmentUtilities.validateFormAndEntries( _notValidatedAppointment, request, listFormErrors, true );
         AppointmentUtilities.fillInListResponseWithMapResponse( _notValidatedAppointment );
@@ -1117,7 +1126,6 @@ public class AppointmentJspBean extends MVCAdminJspBean
             additionalParameters.put( PARAMETER_ID_FORM, strIdForm );
             additionalParameters.put( PARAMETER_STARTING_DATE_TIME, _notValidatedAppointment.getStartingDateTime( ).toString( ) );
             additionalParameters.put( PARAMETER_ENDING_DATE_TIME, _notValidatedAppointment.getEndingDateTime( ).toString( ) );
-            getModel( ).put( MARK_FORM_ERRORS, listFormErrors );
             return redirect( request, VIEW_CREATE_APPOINTMENT, additionalParameters );
         }
         _validatedAppointment = _notValidatedAppointment;
@@ -1500,6 +1508,10 @@ public class AppointmentJspBean extends MVCAdminJspBean
                 break;
             case EMAIL:
                 stream = sortedList.stream( ).sorted( ( a1, a2 ) -> a1.getEmail( ).compareTo( a2.getEmail( ) ) );
+                break;
+            case PHONE_NUMBER:
+            	// Added 'Comparator.nullsLast' to avoid NullPointerException when comparing null values (a user's phone number might be NULL in the database)
+            	stream = sortedList.stream( ).sorted( Comparator.comparing( AppointmentDTO::getPhoneNumber, Comparator.nullsLast( Comparator.naturalOrder() ) ) );
                 break;
             case NB_BOOKED_SEATS:
                 stream = sortedList.stream( ).sorted( ( a1, a2 ) -> Integer.compare( a1.getNbBookedSeats( ), a2.getNbBookedSeats( ) ) );

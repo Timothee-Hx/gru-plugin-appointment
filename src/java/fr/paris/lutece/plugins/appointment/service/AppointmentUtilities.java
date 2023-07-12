@@ -162,7 +162,7 @@ public final class AppointmentUtilities
                 listFormErrors.add( genAttError );
             }
         }
-        if ( !StringUtils.equals( strEmail, strConfirmEmail ) )
+        if ( !StringUtils.equalsIgnoreCase( strEmail, strConfirmEmail ) )
         {
             GenericAttributeError genAttError = new GenericAttributeError( );
             genAttError.setErrorMessage( I18nService.getLocalizedString( ERROR_MESSAGE_CONFIRM_EMAIL, locale ) );
@@ -539,11 +539,12 @@ public final class AppointmentUtilities
      * @param strLastName
      *            the last name of the user
      */
-    public static void fillAppointmentDTO( AppointmentDTO appointmentDTO, int nbBookedSeats, String strEmail, String strFirstName, String strLastName )
+    public static void fillAppointmentDTO( AppointmentDTO appointmentDTO, int nbBookedSeats, String strEmail, String strEmailConfirm, String strFirstName, String strLastName )
     {
         appointmentDTO.setDateOfTheAppointment( appointmentDTO.getSlot( ).get( 0 ).getDate( ).format( Utilities.getFormatter( ) ) );
         appointmentDTO.setNbBookedSeats( nbBookedSeats );
         appointmentDTO.setEmail( strEmail );
+        appointmentDTO.setConfirmEmail(strEmailConfirm);
         appointmentDTO.setFirstName( strFirstName );
         appointmentDTO.setLastName( strLastName );
     }
@@ -1225,7 +1226,7 @@ public final class AppointmentUtilities
             // (Re-)Cancel if current thread also interrupted
             AppLogService.error( e.getMessage( ), e );
             _secheduledExecutor.shutdownNow( );
-
+            Thread.currentThread().interrupt();
         }
 
     }

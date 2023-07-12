@@ -308,6 +308,7 @@ public final class AppointmentService
         appointmentDTO.setFirstName( appointment.getUser( ).getFirstName( ) );
         appointmentDTO.setLastName( appointment.getUser( ).getLastName( ) );
         appointmentDTO.setEmail( appointment.getUser( ).getEmail( ) );
+        appointmentDTO.setPhoneNumber( appointment.getUser( ).getPhoneNumber( ) );
         appointmentDTO.setGuid( appointment.getUser( ).getGuid( ) );
         appointmentDTO.setReference( appointment.getReference( ) );
         LocalDateTime startingDateTime = AppointmentUtilities.getStartingDateTime( appointment );
@@ -331,6 +332,7 @@ public final class AppointmentService
             AdminUser adminUser = AdminUserHome.findByPrimaryKey( appointment.getIdAdminUser( ) );
             if ( adminUser != null )
             {
+                appointmentDTO.setIdAdminUser( adminUser.getUserId());
                 appointmentDTO.setAdminUser(
                         new StringBuilder( adminUser.getFirstName( ) + org.apache.commons.lang3.StringUtils.SPACE + adminUser.getLastName( ) ).toString( ) );
             }
@@ -443,16 +445,20 @@ public final class AppointmentService
     }
 
     /**
-     * Build an appointment DTO from the id of an appointment business object
+     * Build an appointment DTO from the reference of an appointment business object
      * 
-     * @param nIdAppointment
-     *            the id of the appointment
-     * @return the appointment DTO
+     * @param refAppointment
+     *            the reference of the appointment
+     * @return the appointment DTO, or null if the appointment wasn't found
      */
     public static AppointmentDTO buildAppointmentDTOFromRefAppointment( String refAppointment )
     {
         Appointment appointment = AppointmentService.findAppointmentByReference( refAppointment );
 
+        if ( appointment == null )
+        {
+        	return null;
+        }
         User user = UserService.findUserById( appointment.getIdUser( ) );
         List<Slot> listSlot = SlotService.findListSlotByIdAppointment( appointment.getIdAppointment( ) );
         appointment.setSlot( listSlot );
