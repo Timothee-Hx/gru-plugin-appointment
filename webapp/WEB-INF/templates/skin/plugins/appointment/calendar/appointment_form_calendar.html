@@ -66,15 +66,13 @@ ${mark_nb_places_to_take_form!}
 				</div>
 			</#if>
 		</#if>
-		<#if formCalendarErrors??>
-			<#if errors?size &gt; 0 >
-				<div class="alert alert-danger" id='messages_infos_div'>
-					<button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-					<#list errors as error >
-					<span class="icon"><i class='fa fa-exclamation-circle' /></i> ${error.message}<br />
-					</#list>
-				</div>
-			</#if>
+		<#if errorMessageList?? && errorMessageList?size &gt; 0 >
+		<div class="alert alert-danger" id='messages_infos_div'>
+			<button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+			<#list errorMessageList as errorMessage >
+			<span class="icon"><i class='fa fa-exclamation-circle' /></i> ${i18n(errorMessage) }<br />
+			</#list>
+		</div>
 		<#else>
 			<#if errors?size &gt; 0 >
 				<div class="alert alert-danger" id='messages_infos_div'>

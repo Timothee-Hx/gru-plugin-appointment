@@ -33,26 +33,20 @@
  */
 package fr.paris.lutece.plugins.appointment.web;
 
+import java.sql.Time;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.TemporalField;
 import java.time.temporal.WeekFields;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.StringJoiner;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import javax.servlet.http.HttpServletRequest;
 
+import fr.paris.lutece.util.ErrorMessage;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -117,7 +111,6 @@ import fr.paris.lutece.portal.util.mvc.utils.MVCUtils;
 import fr.paris.lutece.portal.util.mvc.xpage.MVCApplication;
 import fr.paris.lutece.portal.util.mvc.xpage.annotations.Controller;
 import fr.paris.lutece.portal.web.xpages.XPage;
-import fr.paris.lutece.util.ErrorMessage;
 import fr.paris.lutece.util.html.HtmlTemplate;
 import fr.paris.lutece.util.url.UrlItem;
 
@@ -258,7 +251,7 @@ public class AppointmentApp extends MVCApplication
     private static final String MARK_TASKS_FORM = "tasks_form";
     private static final String MARK_LOCALE_DATE_TIME = "localeDateTime";
     private static final String MARK_USER_PREFERRED_NAME = "preferred_user_name";
-
+    private static final String MARK_ERROR_MESSAGE_LIST = "errorMessageList";
     // Errors
     private static final String ERROR_MESSAGE_SLOT_FULL = "appointment.message.error.slotFull";
     private static final String ERROR_MESSAGE_SLOT_EDIT_TASK_EXPIRED_TIME = "appointment.message.error.appointment.edit.expired.time";
@@ -320,10 +313,11 @@ public class AppointmentApp extends MVCApplication
         _appointmentForm = FormService.buildAppointmentFormWithoutReservationRule( nIdForm );
         _strNbPlacesToTakeLength = String.valueOf(_appointmentForm.getNbConsecutiveSlots());
         boolean bError = false;
+        List<String> errorMessageList = new ArrayList<>();
         if ( !_appointmentForm.getIsActive( ) )
         {
-            addError( ERROR_MESSAGE_FORM_NOT_ACTIVE, locale );
             bError = true;
+            errorMessageList.add( ERROR_MESSAGE_FORM_NOT_ACTIVE );
         }
         
         FormMessage formMessages = FormMessageService.findFormMessageByIdForm( nIdForm );
@@ -340,7 +334,7 @@ public class AppointmentApp extends MVCApplication
             }
             if ( appointmentDTO.getIsCancelled( ) || appointmentDTO.getStartingDateTime( ).isBefore( LocalDateTime.now( ) ) )
             {
-                addError( ERROR_MESSAGE_REPORT_APPOINTMENT, locale );
+                errorMessageList.add(ERROR_MESSAGE_REPORT_APPOINTMENT);
                 bError = true;
             }
             else
@@ -356,7 +350,7 @@ public class AppointmentApp extends MVCApplication
         LocalDate startingValidityDate = null;
         if ( _appointmentForm.getDateStartValidity( ) == null )
         {
-            addError( ERROR_MESSAGE_NO_STARTING_VALIDITY_DATE, locale );
+            errorMessageList.add(ERROR_MESSAGE_NO_STARTING_VALIDITY_DATE);
             bError = true;
         }
         else
@@ -390,7 +384,7 @@ public class AppointmentApp extends MVCApplication
             }
             if ( startingDateOfDisplay.isAfter( endingDateOfDisplay ) )
             {
-                addError( ERROR_MESSAGE_FORM_NO_MORE_VALID, locale );
+                errorMessageList.add(ERROR_MESSAGE_FORM_NO_MORE_VALID);
                 bError = true;
             }
         }
@@ -433,7 +427,8 @@ public class AppointmentApp extends MVCApplication
             
             if ( _nNbPlacesToTake > Integer.parseInt( _strNbPlacesToTakeLength ) )
             {
-            	addError( ERROR_MESSAGE_NB_PLACE_TO_TAKE_TO_BIG, locale );
+                errorMessageList.add(ERROR_MESSAGE_NB_PLACE_TO_TAKE_TO_BIG);
+                bError = true;
             }
 
             // Get the min time from now before a user can take an appointment (in hours)
@@ -474,11 +469,7 @@ public class AppointmentApp extends MVCApplication
                 }
             }
             if (firstDateOfFreeOpenSlot == null) {
-                if (formMessages != null && StringUtils.isNotEmpty(formMessages.getNoAvailableSlot())) {
-                    addError(formMessages.getNoAvailableSlot());
-                } else {
-                    addError(ERROR_MESSAGE_NO_AVAILABLE_SLOT, locale);
-                }
+                errorMessageList.add(ERROR_MESSAGE_NO_AVAILABLE_SLOT);
                 bError = true;
             }
             // Display the week with the first available slot
@@ -486,10 +477,6 @@ public class AppointmentApp extends MVCApplication
             {
                 dateOfDisplay = firstDateOfFreeOpenSlot;
             }
-        }
-        if ( bError )
-        {
-            model.put( MARK_FORM_CALENDAR_ERRORS, bError );
         }
         if ( formMessages != null && StringUtils.isNotEmpty( formMessages.getCalendarDescription( ) ) )
         {
@@ -546,6 +533,9 @@ public class AppointmentApp extends MVCApplication
                 dayView = AGENDA_DAY;
                 weekView = AGENDA_WEEK;
                 break;
+        }
+        if(bError) {
+            model.put( MARK_ERROR_MESSAGE_LIST, errorMessageList );
         }
         // Get the min and max date of the open days (for the week navigation on
         // open days calendar templates)
